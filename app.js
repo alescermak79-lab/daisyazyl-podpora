@@ -70,6 +70,11 @@ document.getElementById('stories').innerHTML = STORIES.map(s => `
   </div>
 </article>`).join('');
 
+(() => {
+  const arts = document.querySelectorAll('#stories .story');
+  if (arts[2]) arts[2].insertAdjacentHTML('afterend', `<div class="mid-cta"><div><h3>Pomozte dalším jako Vojtíšek, Uhlík a Simba</h3><p>Pravidelný dar od 39 Kč měsíčně platí veterinu, léky i krmivo.</p></div><a class="btn" href="#darovat">Chci přispívat →</a></div>`);
+})();
+
 document.querySelectorAll('.thumbs button').forEach(b => b.addEventListener('click', () => {
   const pics = b.closest('.pics');
   pics.querySelector('.main').src = b.dataset.src;
@@ -94,18 +99,69 @@ const TIERS = [
   { am:179, what:'Na odčervení, očkování, léky a kastrace nováčků.', best:true },
   { am:329, what:'Na vyšetření, operace a léčbu nejtěžších případů.' },
 ];
+const QRS = {};
 document.getElementById('qrs').innerHTML = TIERS.map(t => {
   const qr = qrcode(0, 'M'); qr.addData(spayd(t.am)); qr.make();
+  QRS[t.am] = qr;
   const url = qr.createDataURL(8, 2);
-  return `<div class="qr${t.best?' best':''}">
+  return `<div class="qr${t.best?' best':''}" id="qr-${t.am}">
     ${t.best?'<span class="rib">Nejčastější volba</span>':''}
     <div class="amt">${t.am} Kč</div><div class="per">měsíčně · trvalý příkaz</div>
     <div class="what">${t.what}</div>
     <div class="code"><img src="${url}" alt="QR kód pro trvalý příkaz ${t.am} Kč měsíčně"></div>
-    <div class="scan">Naskenujte v mobilním bankovnictví</div>
-    <a class="dl" href="${url}" download="daisy-azyl-qr-${t.am}kc.gif">Stáhnout QR kód</a>
+    <div class="scan desktop-only">Naskenujte v mobilním bankovnictví</div>
+    <div class="actions">
+      <button type="button" data-save="${t.am}">Uložit QR do galerie</button>
+      <button type="button" class="alt" data-copyinfo="${t.am}">Zkopírovat platební údaje</button>
+    </div>
   </div>`;
 }).join('');
+
+function qrCanvas(am){
+  const qr = QRS[am], n = qr.getModuleCount(), cell = 12, pad = 48, w = n*cell + pad*2, h = w + 90;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0,0,w,h);
+  x.fillStyle = '#000';
+  for (let r=0;r<n;r++) for (let k=0;k<n;k++) if (qr.isDark(r,k)) x.fillRect(pad+k*cell, pad+r*cell, cell, cell);
+  x.fillStyle = '#082320'; x.textAlign = 'center';
+  x.font = 'bold 30px Outfit, Arial, sans-serif'; x.fillText(`Daisy azyl – ${am} Kč měsíčně`, w/2, w+28);
+  x.font = '22px Outfit, Arial, sans-serif'; x.fillText('trvalý příkaz · účet 267695286/0600', w/2, w+62);
+  return c;
+}
+document.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
+  const am = +b.dataset.save, name = `daisy-azyl-${am}kc-mesicne.png`;
+  qrCanvas(am).toBlob(async blob => {
+    const file = new File([blob], name, {type:'image/png'});
+    try {
+      if (navigator.canShare && navigator.canShare({files:[file]})) {
+        await navigator.share({files:[file], title:`QR platba Daisy azyl ${am} Kč`});
+        return;
+      }
+    } catch(e) { if (e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    b.textContent = 'Uloženo ✓'; setTimeout(() => b.textContent = 'Uložit QR do galerie', 2500);
+  }, 'image/png');
+}));
+document.querySelectorAll('[data-copyinfo]').forEach(b => b.addEventListener('click', async () => {
+  const am = b.dataset.copyinfo;
+  const txt = `Účet: 267695286/0600\nIBAN: ${IBAN}\nČástka: ${am} Kč\nČetnost: měsíčně (trvalý příkaz)\nZpráva: PRAVIDELNY DAR DAISY AZYL\nPříjemce: Daisy azyl z.s.`;
+  try { await navigator.clipboard.writeText(txt); b.textContent = 'Zkopírováno ✓'; }
+  catch(e) { alert(txt); }
+  setTimeout(() => b.textContent = 'Zkopírovat platební údaje', 2500);
+}));
+
+/* sticky mobile CTA: skrýt v horní části a u sekce darování */
+(() => {
+  const bar = document.getElementById('stickyCta'), don = document.getElementById('darovat'), hero = document.querySelector('.hero');
+  if (!bar || !('IntersectionObserver' in window)) return;
+  let heroVis = true, donVis = false;
+  const upd = () => bar.classList.toggle('hide', heroVis || donVis);
+  new IntersectionObserver(e => { heroVis = e[0].isIntersecting; upd(); }).observe(hero);
+  new IntersectionObserver(e => { donVis = e[0].isIntersecting; upd(); }, {rootMargin:'0px 0px -30% 0px'}).observe(don);
+  upd();
+})();
 
 document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'zkopírováno ✓'; }
