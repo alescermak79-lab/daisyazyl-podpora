@@ -72,7 +72,7 @@ document.getElementById('stories').innerHTML = STORIES.map(s => `
 
 (() => {
   const arts = document.querySelectorAll('#stories .story');
-  if (arts[2]) arts[2].insertAdjacentHTML('afterend', `<div class="mid-cta"><div><h3>Pomozte dalším jako Vojtíšek, Uhlík a Simba</h3><p>Pravidelný dar od 39 Kč měsíčně platí veterinu, léky i krmivo.</p></div><a class="btn" href="#darovat">Chci přispívat →</a></div>`);
+  if (arts[2]) arts[2].insertAdjacentHTML('afterend', `<div class="mid-cta"><div><h3>Pomozte dalším jako Vojtíšek, Uhlík a Simba</h3><p>Pravidelný dar od 100 Kč měsíčně platí veterinu, léky i krmivo.</p></div><a class="btn" href="#darovat">Chci přispívat →</a></div>`);
 })();
 
 document.querySelectorAll('.thumbs button').forEach(b => b.addEventListener('click', () => {
@@ -95,27 +95,43 @@ function spayd(amount){
           'RN:DAISY AZYL Z.S.','MSG:PRAVIDELNY DAR DAISY AZYL'].join('*');
 }
 const TIERS = [
-  { am:39,  what:'Na krmivo pro kočky, které o jídlo roky bojovaly.' },
-  { am:179, what:'Na odčervení, očkování, léky a kastrace nováčků.', best:true },
-  { am:329, what:'Na vyšetření, operace a léčbu nejtěžších případů.' },
+  { am:100, what:'Přispívá na kvalitní krmivo a stelivo pro kočky, které o jídlo roky bojovaly.' },
+  { am:200, what:'Pomáhá hradit odčervení, očkování, léky a kastrace nově přijatých koček.', best:true },
+  { am:500, what:'Podílí se na vyšetřeních, operacích a dlouhodobé léčbě nejtěžších případů.' },
 ];
 const QRS = {};
-document.getElementById('qrs').innerHTML = TIERS.map(t => {
-  const qr = qrcode(0, 'M'); qr.addData(spayd(t.am)); qr.make();
-  QRS[t.am] = qr;
-  const url = qr.createDataURL(8, 2);
-  return `<div class="qr${t.best?' best':''}" id="qr-${t.am}">
-    ${t.best?'<span class="rib">Nejčastější volba</span>':''}
-    <div class="amt">${t.am} Kč</div><div class="per">měsíčně · trvalý příkaz</div>
-    <div class="what">${t.what}</div>
-    <div class="code"><img src="${url}" alt="QR kód pro trvalý příkaz ${t.am} Kč měsíčně"></div>
+const fmt = n => n.toLocaleString('cs-CZ');
+function makeQr(am){
+  const qr = qrcode(0, 'M'); qr.addData(spayd(am)); qr.make();
+  QRS[am] = qr; return qr.createDataURL(8, 2);
+}
+function cardInner(am, what){
+  return `<div class="amt">${fmt(am)} Kč</div><div class="per">měsíčně · ${fmt(am*12)} Kč ročně</div>
+    ${what ? `<div class="what">${what}</div>` : ''}
+    <div class="code"><img src="${makeQr(am)}" alt="QR kód pro trvalý příkaz ${am} Kč měsíčně"></div>
     <div class="scan desktop-only">Naskenujte v mobilním bankovnictví</div>
     <div class="actions">
-      <button type="button" data-save="${t.am}">Uložit QR do galerie</button>
-      <button type="button" class="alt" data-copyinfo="${t.am}">Zkopírovat platební údaje</button>
-    </div>
-  </div>`;
-}).join('');
+      <button type="button" data-save="${am}">Uložit QR do galerie</button>
+      <button type="button" class="alt" data-copyinfo="${am}">Zkopírovat platební údaje</button>
+    </div>`;
+}
+document.getElementById('qrs').innerHTML = TIERS.map(t =>
+  `<div class="qr${t.best?' best':''}" id="qr-${t.am}">${t.best?'<span class="rib">Nejčastější volba</span>':''}${cardInner(t.am, t.what)}</div>`
+).join('');
+
+/* Jiná částka */
+const cForm = document.getElementById('customForm');
+if (cForm) cForm.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const inp = document.getElementById('customAmount'), err = document.getElementById('customErr');
+  const am = Math.round(Number(String(inp.value).replace(/\s/g,'').replace(',', '.')));
+  if (!am || am < 20 || am > 100000) { err.textContent = 'Zadejte částku od 20 do 100 000 Kč.'; err.hidden = false; return; }
+  err.hidden = true;
+  const out = document.getElementById('customOut');
+  out.innerHTML = `<div class="qr best">${cardInner(am, 'Děkujeme, že si částku určujete sami.')}</div>`;
+  out.hidden = false;
+  out.scrollIntoView({block:'nearest'});
+});
 
 function qrCanvas(am){
   const qr = QRS[am], n = qr.getModuleCount(), cell = 12, pad = 48, w = n*cell + pad*2, h = w + 90;
@@ -125,11 +141,15 @@ function qrCanvas(am){
   x.fillStyle = '#000';
   for (let r=0;r<n;r++) for (let k=0;k<n;k++) if (qr.isDark(r,k)) x.fillRect(pad+k*cell, pad+r*cell, cell, cell);
   x.fillStyle = '#082320'; x.textAlign = 'center';
-  x.font = 'bold 30px Outfit, Arial, sans-serif'; x.fillText(`Daisy azyl – ${am} Kč měsíčně`, w/2, w+28);
+  x.font = 'bold 30px Outfit, Arial, sans-serif'; x.fillText(`Daisy azyl – ${fmt(am)} Kč měsíčně`, w/2, w+28);
   x.font = '22px Outfit, Arial, sans-serif'; x.fillText('trvalý příkaz · účet 267695286/0600', w/2, w+62);
   return c;
 }
-document.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
+document.addEventListener('click', ev => {
+  const s = ev.target.closest('[data-save]'), c = ev.target.closest('[data-copyinfo]');
+  if (s) saveQr(s); else if (c) copyInfo(c);
+});
+function saveQr(b){
   const am = +b.dataset.save, name = `daisy-azyl-${am}kc-mesicne.png`;
   qrCanvas(am).toBlob(async blob => {
     const file = new File([blob], name, {type:'image/png'});
@@ -143,13 +163,19 @@ document.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click'
     document.body.appendChild(a); a.click(); a.remove();
     b.textContent = 'Uloženo ✓'; setTimeout(() => b.textContent = 'Uložit QR do galerie', 2500);
   }, 'image/png');
-}));
-document.querySelectorAll('[data-copyinfo]').forEach(b => b.addEventListener('click', async () => {
+}
+async function copyInfo(b){
   const am = b.dataset.copyinfo;
   const txt = `Účet: 267695286/0600\nIBAN: ${IBAN}\nČástka: ${am} Kč\nČetnost: měsíčně (trvalý příkaz)\nZpráva: PRAVIDELNY DAR DAISY AZYL\nPříjemce: Daisy azyl z.s.`;
   try { await navigator.clipboard.writeText(txt); b.textContent = 'Zkopírováno ✓'; }
   catch(e) { alert(txt); }
   setTimeout(() => b.textContent = 'Zkopírovat platební údaje', 2500);
+}
+
+document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'zkopírováno ✓'; }
+  catch(e) { b.textContent = b.dataset.copy; }
+  setTimeout(() => b.textContent = 'kopírovat', 2000);
 }));
 
 /* sticky mobile CTA: skrýt v horní části a u sekce darování */
@@ -162,9 +188,3 @@ document.querySelectorAll('[data-copyinfo]').forEach(b => b.addEventListener('cl
   new IntersectionObserver(e => { donVis = e[0].isIntersecting; upd(); }, {rootMargin:'0px 0px -30% 0px'}).observe(don);
   upd();
 })();
-
-document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'zkopírováno ✓'; }
-  catch(e) { b.textContent = b.dataset.copy; }
-  setTimeout(() => b.textContent = 'kopírovat', 2000);
-}));
